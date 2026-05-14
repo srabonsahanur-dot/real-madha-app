@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MADHA 🌸</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --rose: #e8a0b0;
+    --deep-rose: #c4687a;
+    --blush: #f7dde4;
+    --gold: #c9975a;
+    --rose-gold: #b76e79;
+    --cream: #fdf6f8;
+    --text: #3a2029;
+    --muted: #9a7080;
+    --white: #fff;
+    --period-red: #d94f6b;
+    --period-light: #fce8ec;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 10%, #f9d0dc55 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 90%, #f5c6d055 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 30px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--deep-rose);
+    color: white;
+    padding: 12px 28px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    z-index: 9999;
+    transition: transform 0.3s ease;
+    box-shadow: 0 4px 20px #c4687a40;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* LOADING */
+  .loading-overlay {
+    position: fixed; inset: 0;
+    background: var(--cream);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9998;
+    flex-direction: column; gap: 16px;
+    transition: opacity 0.4s ease;
+  }
+  .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+  .loading-spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--blush);
+    border-top-color: var(--deep-rose);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.2rem;
+    color: var(--rose-gold);
+    font-style: italic;
+  }
+
+  /* HEADER */
+  .header {
+    position: relative; text-align: center;
+    padding: 60px 20px 40px; z-index: 1;
+  }
+  .header-petals { position: absolute; top: 0; left: 0; right: 0; height: 100%; overflow: hidden; pointer-events: none; }
+  .petal { position: absolute; opacity: 0.35; animation: floatPetal linear infinite; }
+  @keyframes floatPetal {
+    0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.4; } 90% { opacity: 0.3; }
+    100% { transform: translateY(120px) rotate(360deg); opacity: 0; }
+  }
+  .header-tag { font-size: 0.7rem; letter-spacing: 4px; text-transform: uppercase; color: var(--rose-gold); margin-bottom: 12px; }
+  .header h1 { font-family: 'Cormorant Garamond', serif; font-size: clamp(4rem, 12vw, 8rem); font-weight: 300; letter-spacing: 0.1em; color: var(--deep-rose); line-height: 1; text-shadow: 2px 2px 30px #e8a0b055; }
+  .header h1 span { color: var(--rose-gold); font-style: italic; }
+  .header-sub { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.1rem; color: var(--muted); margin-top: 10px; }
+
+  /* NAV */
+  .nav { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; padding: 0 20px 40px; position: relative; z-index: 1; }
+  .nav-btn { background: white; border: 1.5px solid var(--blush); color: var(--deep-rose); padding: 10px 22px; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; letter-spacing: 0.5px; cursor: pointer; transition: all 0.25s ease; box-shadow: 0 2px 12px #e8a0b020; }
+  .nav-btn:hover, .nav-btn.active { background: var(--deep-rose); color: white; border-color: var(--deep-rose); box-shadow: 0 4px 20px #c4687a40; transform: translateY(-2px); }
+
+  /* SECTIONS */
+  .section { display: none; max-width: 900px; margin: 0 auto; padding: 0 20px 80px; position: relative; z-index: 1; animation: fadeUp 0.4s ease; }
+  .section.active { display: block; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .section-title { font-family: 'Cormorant Garamond', serif; font-size: 2.4rem; font-weight: 300; color: var(--deep-rose); text-align: center; margin-bottom: 8px; }
+  .section-line { width: 60px; height: 2px; background: linear-gradient(90deg, var(--rose), var(--gold)); margin: 0 auto 40px; border-radius: 2px; }
+
+  /* GALLERY */
+  .gallery-upload-area { border: 2px dashed var(--rose); border-radius: 20px; padding: 40px 20px; text-align: center; background: white; cursor: pointer; transition: all 0.3s ease; margin-bottom: 30px; }
+  .gallery-upload-area:hover { border-color: var(--deep-rose); background: var(--blush); transform: scale(1.01); }
+  .upload-icon { font-size: 2.5rem; margin-bottom: 10px; }
+  .upload-text { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--rose-gold); }
+  .upload-sub { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+  .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .gallery-item { position: relative; border-radius: 16px; overflow: hidden; aspect-ratio: 1; box-shadow: 0 4px 20px #c4687a20; cursor: pointer; transition: transform 0.3s ease; }
+  .gallery-item:hover { transform: scale(1.03); }
+  .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+  .gallery-item .delete-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.9); border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 0.8rem; cursor: pointer; display: none; align-items: center; justify-content: center; color: var(--period-red); }
+  .gallery-item:hover .delete-btn { display: flex; }
+  .gallery-uploading { position: absolute; inset: 0; background: rgba(255,255,255,0.85); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+
+  /* LIGHTBOX */
+  .lightbox { display: none; position: fixed; inset: 0; background: rgba(40,10,20,0.92); z-index: 1000; align-items: center; justify-content: center; flex-direction: column; padding: 20px; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 90vw; max-height: 80vh; border-radius: 16px; box-shadow: 0 8px 60px #00000060; }
+  .lightbox-close { position: absolute; top: 20px; right: 24px; font-size: 2rem; color: white; cursor: pointer; opacity: 0.7; background: none; border: none; }
+
+  /* ABOUT */
+  .about-card { background: white; border-radius: 24px; padding: 40px; box-shadow: 0 4px 30px #e8a0b025; margin-bottom: 24px; }
+  .about-avatar { width: 120px; height: 120px; border-radius: 50%; border: 4px solid var(--blush); box-shadow: 0 4px 20px #c4687a30; object-fit: cover; display: block; margin: 0 auto 24px; cursor: pointer; }
+  .about-avatar-placeholder { width: 120px; height: 120px; border-radius: 50%; border: 3px dashed var(--rose); background: var(--blush); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; margin: 0 auto 24px; cursor: pointer; transition: all 0.3s; }
+  .about-avatar-placeholder:hover { border-color: var(--deep-rose); background: #f5c8d0; }
+  .about-name { font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 400; color: var(--deep-rose); text-align: center; margin-bottom: 4px; }
+  .about-tagline { font-family: 'Cormorant Garamond', serif; font-style: italic; text-align: center; color: var(--muted); margin-bottom: 30px; font-size: 1rem; }
+  .about-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .about-fields { grid-template-columns: 1fr; } }
+  .about-field label { display: block; font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; color: var(--rose-gold); margin-bottom: 6px; }
+  .about-field input, .about-field textarea { width: 100%; border: 1.5px solid var(--blush); border-radius: 12px; padding: 12px 16px; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; color: var(--text); background: var(--cream); outline: none; transition: border-color 0.2s; resize: none; }
+  .about-field input:focus, .about-field textarea:focus { border-color: var(--deep-rose); }
+  .about-field.full { grid-column: 1 / -1; }
+  .save-btn { display: block; margin: 24px auto 0; padding: 14px 40px; background: var(--deep-rose); color: white; border: none; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 20px #c4687a30; }
+  .save-btn:hover { background: var(--rose-gold); transform: translateY(-2px); }
+
+  /* QUALS */
+  .qual-list { display: flex; flex-direction: column; gap: 16px; }
+  .qual-card { background: white; border-radius: 20px; padding: 24px 28px; box-shadow: 0 3px 20px #e8a0b020; display: flex; gap: 20px; align-items: flex-start; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
+  .qual-card:hover { transform: translateY(-3px); box-shadow: 0 8px 30px #c4687a25; }
+  .qual-icon { font-size: 2rem; width: 50px; height: 50px; background: var(--blush); border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .qual-info { flex: 1; }
+  .qual-title { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--deep-rose); margin-bottom: 4px; }
+  .qual-sub { font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+  .qual-desc { font-size: 0.85rem; color: var(--text); line-height: 1.6; }
+  .qual-year { font-size: 0.75rem; background: var(--blush); color: var(--rose-gold); padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+  .qual-delete { position: absolute; top: 14px; right: 14px; background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--rose); opacity: 0; transition: opacity 0.2s; }
+  .qual-card:hover .qual-delete { opacity: 1; }
+  .add-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 16px; background: white; border: 2px dashed var(--rose); border-radius: 20px; color: var(--rose-gold); font-family: 'DM Sans', sans-serif; font-size: 0.9rem; cursor: pointer; transition: all 0.3s; margin-top: 8px; }
+  .add-btn:hover { background: var(--blush); border-color: var(--deep-rose); color: var(--deep-rose); }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(40,10,20,0.6); z-index: 500; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 24px; padding: 36px; width: 100%; max-width: 480px; box-shadow: 0 20px 80px #c4687a40; animation: fadeUp 0.3s ease; }
+  .modal h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.6rem; color: var(--deep-rose); margin-bottom: 24px; }
+  .modal-field { margin-bottom: 16px; }
+  .modal-field label { display: block; font-size: 0.72rem; letter-spacing: 2px; text-transform: uppercase; color: var(--rose-gold); margin-bottom: 6px; }
+  .modal-field input, .modal-field textarea, .modal-field select { width: 100%; border: 1.5px solid var(--blush); border-radius: 12px; padding: 12px 16px; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; color: var(--text); outline: none; background: var(--cream); transition: border-color 0.2s; resize: none; }
+  .modal-field input:focus, .modal-field textarea:focus { border-color: var(--deep-rose); }
+  .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+  .btn-primary { flex: 1; padding: 14px; background: var(--deep-rose); color: white; border: none; border-radius: 14px; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; }
+  .btn-primary:hover { background: var(--rose-gold); box-shadow: 0 4px 20px #c4687a40; }
+  .btn-secondary { flex: 1; padding: 14px; background: var(--blush); color: var(--deep-rose); border: none; border-radius: 14px; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; cursor: pointer; }
+
+  /* PERIOD */
+  .period-hero { background: linear-gradient(135deg, white, var(--blush)); border-radius: 24px; padding: 36px; box-shadow: 0 4px 30px #e8a0b025; margin-bottom: 24px; text-align: center; }
+  .period-status { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; color: var(--muted); margin-bottom: 8px; }
+  .period-days-big { font-family: 'Cormorant Garamond', serif; font-size: 5rem; font-weight: 300; color: var(--period-red); line-height: 1; }
+  .period-days-label { font-size: 0.8rem; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 24px; }
+  .period-phase-badge { display: inline-block; padding: 8px 24px; border-radius: 50px; font-size: 0.85rem; font-weight: 500; letter-spacing: 1px; margin-bottom: 20px; }
+  .phase-menstrual { background: #fce8ec; color: #d94f6b; }
+  .phase-follicular { background: #fef3e2; color: #d4800a; }
+  .phase-ovulation { background: #e8f5e9; color: #2e7d32; }
+  .phase-luteal { background: #f3e5f5; color: #7b1fa2; }
+  .period-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 500px) { .period-grid { grid-template-columns: 1fr; } }
+  .period-info-card { background: white; border-radius: 20px; padding: 24px; box-shadow: 0 3px 20px #e8a0b020; text-align: center; }
+  .period-info-icon { font-size: 2rem; margin-bottom: 8px; }
+  .period-info-label { font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .period-info-value { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--deep-rose); }
+  .cycle-calendar { background: white; border-radius: 24px; padding: 30px; box-shadow: 0 4px 30px #e8a0b025; margin-bottom: 24px; }
+  .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .cal-month { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; color: var(--deep-rose); }
+  .cal-nav { background: var(--blush); border: none; border-radius: 10px; width: 36px; height: 36px; cursor: pointer; font-size: 1rem; color: var(--deep-rose); transition: background 0.2s; }
+  .cal-nav:hover { background: var(--rose); color: white; }
+  .cal-days-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
+  .cal-day-name { text-align: center; font-size: 0.7rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); padding: 4px; }
+  .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-day { aspect-ratio: 1; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; border: 1.5px solid transparent; }
+  .cal-day:hover { background: var(--blush); }
+  .cal-day.empty { cursor: default; }
+  .cal-day.today { border-color: var(--deep-rose); font-weight: 600; color: var(--deep-rose); }
+  .cal-day.period-day { background: #fce8ec; color: var(--period-red); font-weight: 600; }
+  .cal-day.ovulation-day { background: #e8f5e9; color: #2e7d32; font-weight: 600; }
+  .cal-day.fertile-day { background: #f3fce8; color: #558b2f; }
+  .cal-day.predicted-period { background: #fce8ec88; color: #d94f6b88; border: 1.5px dashed #d94f6b55; }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--muted); }
+  .legend-dot { width: 14px; height: 14px; border-radius: 4px; }
+  .period-settings { background: white; border-radius: 24px; padding: 30px; box-shadow: 0 4px 30px #e8a0b025; }
+  .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--blush); }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-label { font-size: 0.85rem; color: var(--text); }
+  .settings-sub { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .settings-input { border: 1.5px solid var(--blush); border-radius: 10px; padding: 8px 14px; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; color: var(--text); outline: none; width: 140px; background: var(--cream); }
+  .settings-input:focus { border-color: var(--deep-rose); }
+
+  /* NOTES */
+  .notes-list { display: flex; flex-direction: column; gap: 16px; }
+  .note-card { background: white; border-radius: 20px; padding: 28px; box-shadow: 0 3px 20px #e8a0b020; position: relative; transition: transform 0.2s; border-left: 4px solid var(--rose); }
+  .note-card:hover { transform: translateY(-2px); }
+  .note-date { font-size: 0.72rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .note-text { font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; line-height: 1.7; color: var(--text); font-style: italic; }
+  .note-mood { display: inline-block; margin-top: 12px; font-size: 1.3rem; }
+  .note-delete { position: absolute; top: 14px; right: 14px; background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--rose); opacity: 0; transition: opacity 0.2s; }
+  .note-card:hover .note-delete { opacity: 1; }
+
+  /* COUNTDOWN */
+  .countdown-hero { background: linear-gradient(135deg, var(--deep-rose), var(--rose-gold)); border-radius: 24px; padding: 50px 30px; text-align: center; color: white; box-shadow: 0 8px 40px #c4687a45; margin-bottom: 24px; }
+  .countdown-label { font-size: 0.75rem; letter-spacing: 3px; text-transform: uppercase; opacity: 0.8; margin-bottom: 10px; }
+  .countdown-title { font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; font-weight: 300; margin-bottom: 30px; opacity: 0.95; }
+  .countdown-timer { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+  .countdown-unit { background: rgba(255,255,255,0.15); border-radius: 18px; padding: 20px 28px; min-width: 90px; }
+  .countdown-num { font-family: 'Cormorant Garamond', serif; font-size: 3.5rem; font-weight: 300; line-height: 1; display: block; }
+  .countdown-unit-label { font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; opacity: 0.7; margin-top: 6px; }
+  .countdown-list { display: flex; flex-direction: column; gap: 14px; }
+  .countdown-card { background: white; border-radius: 20px; padding: 22px 26px; box-shadow: 0 3px 20px #e8a0b020; display: flex; align-items: center; gap: 16px; transition: transform 0.2s; position: relative; }
+  .countdown-card:hover { transform: translateY(-2px); }
+  .countdown-card-icon { font-size: 1.8rem; width: 50px; height: 50px; background: var(--blush); border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .countdown-card-name { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; color: var(--deep-rose); }
+  .countdown-card-date { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .countdown-card-days { margin-left: auto; font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; color: var(--deep-rose); text-align: right; }
+  .countdown-card-days span { display: block; font-family: 'DM Sans', sans-serif; font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .cd-delete { position: absolute; top: 10px; right: 10px; background: none; border: none; cursor: pointer; font-size: 0.9rem; color: var(--rose); opacity: 0; transition: opacity 0.2s; }
+  .countdown-card:hover .cd-delete { opacity: 1; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--cream); }
+  ::-webkit-scrollbar-thumb { background: var(--rose); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">loading Madha's world...</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Petals -->
+<div class="header-petals" id="petals"></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-tag">✦ my world ✦</div>
+  <h1>MA<span>DHA</span></h1>
+  <div class="header-sub" id="header-sub">she is everything 🌸</div>
+</div>
+
+<!-- Nav -->
+<div class="nav">
+  <button class="nav-btn active" onclick="showSection('gallery',this)">📸 Photos</button>
+  <button class="nav-btn" onclick="showSection('about',this)">💖 About Her</button>
+  <button class="nav-btn" onclick="showSection('qualifications',this)">🎓 Achievements</button>
+  <button class="nav-btn" onclick="showSection('period',this)">🌙 Cycle Tracker</button>
+  <button class="nav-btn" onclick="showSection('notes',this)">💌 Love Notes</button>
+  <button class="nav-btn" onclick="showSection('countdown',this)">⏳ Countdowns</button>
+</div>
+
+<!-- GALLERY -->
+<div class="section active" id="section-gallery">
+  <div class="section-title">Our Memories</div>
+  <div class="section-line"></div>
+  <div class="gallery-upload-area" onclick="document.getElementById('gallery-input').click()">
+    <div class="upload-icon">🌸</div>
+    <div class="upload-text">Add photos of Madha & you</div>
+    <div class="upload-sub">Click to upload · JPG, PNG, WEBP</div>
+  </div>
+  <input type="file" id="gallery-input" multiple accept="image/*" onchange="addPhotos(event)" style="display:none">
+  <div class="gallery-grid" id="gallery-grid"></div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close">✕</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<!-- ABOUT -->
+<div class="section" id="section-about">
+  <div class="section-title">About Her</div>
+  <div class="section-line"></div>
+  <div class="about-card">
+    <div id="avatar-placeholder" class="about-avatar-placeholder" onclick="document.getElementById('avatar-input').click()">👩</div>
+    <img id="avatar-img" class="about-avatar" style="display:none" onclick="document.getElementById('avatar-input').click()" src="" alt="Madha">
+    <input type="file" id="avatar-input" accept="image/*" style="display:none" onchange="setAvatar(event)">
+    <div class="about-name">MADHA</div>
+    <div class="about-tagline" id="tagline-display">my love, my sunshine 🌸</div>
+    <div class="about-fields">
+      <div class="about-field"><label>Birthday</label><input type="date" id="about-birthday"></div>
+      <div class="about-field"><label>Hometown</label><input type="text" id="about-hometown" placeholder="Where she's from..."></div>
+      <div class="about-field"><label>Occupation</label><input type="text" id="about-job" placeholder="What she does..."></div>
+      <div class="about-field"><label>Favourite Things</label><input type="text" id="about-fav" placeholder="e.g. coffee, sunsets, cats..."></div>
+      <div class="about-field full"><label>My favourite thing about her</label><textarea id="about-fav-thing" rows="3" placeholder="Write what you love about her..."></textarea></div>
+      <div class="about-field full"><label>Love story tagline</label><input type="text" id="about-tagline" placeholder="e.g. my love, my sunshine..."></div>
+    </div>
+    <button class="save-btn" onclick="saveAbout()">Save Changes 🌸</button>
+  </div>
+</div>
+
+<!-- QUALIFICATIONS -->
+<div class="section" id="section-qualifications">
+  <div class="section-title">Her Achievements</div>
+  <div class="section-line"></div>
+  <div class="qual-list" id="qual-list"></div>
+  <button class="add-btn" onclick="openQualModal()">+ Add Achievement</button>
+</div>
+<div class="modal-overlay" id="qual-modal">
+  <div class="modal">
+    <h3>🎓 Add Achievement</h3>
+    <div class="modal-field"><label>Title</label><input type="text" id="qual-title-input" placeholder="e.g. Bachelor's in Psychology"></div>
+    <div class="modal-field"><label>Institution</label><input type="text" id="qual-inst-input" placeholder="e.g. University of Dhaka"></div>
+    <div class="modal-field"><label>Year</label><input type="text" id="qual-year-input" placeholder="e.g. 2023"></div>
+    <div class="modal-field"><label>Description (optional)</label><textarea rows="3" id="qual-desc-input" placeholder="Brief description..."></textarea></div>
+    <div class="modal-field"><label>Icon Emoji</label><input type="text" id="qual-icon-input" placeholder="🎓" maxlength="2"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('qual-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveQual()">Save 🌸</button>
+    </div>
+  </div>
+</div>
+
+<!-- PERIOD -->
+<div class="section" id="section-period">
+  <div class="section-title">Cycle Tracker</div>
+  <div class="section-line"></div>
+  <div class="period-hero">
+    <div class="period-status" id="period-status-text">Loading...</div>
+    <div class="period-days-big" id="period-days-big">–</div>
+    <div class="period-days-label" id="period-days-label">days</div>
+    <div class="period-phase-badge" id="period-phase-badge">–</div>
+    <br>
+    <button class="btn-primary" style="max-width:220px;margin:0 auto" onclick="openPeriodLogModal()">🩸 Log Period Start</button>
+  </div>
+  <div class="period-grid">
+    <div class="period-info-card"><div class="period-info-icon">📅</div><div class="period-info-label">Last Period</div><div class="period-info-value" id="last-period-val">Not set</div></div>
+    <div class="period-info-card"><div class="period-info-icon">🔮</div><div class="period-info-label">Next Period</div><div class="period-info-value" id="next-period-val">–</div></div>
+    <div class="period-info-card"><div class="period-info-icon">🌟</div><div class="period-info-label">Ovulation Day</div><div class="period-info-value" id="ovulation-val">–</div></div>
+    <div class="period-info-card"><div class="period-info-icon">💚</div><div class="period-info-label">Fertile Window</div><div class="period-info-value" id="fertile-val">–</div></div>
+  </div>
+  <div class="cycle-calendar">
+    <div class="cal-header">
+      <button class="cal-nav" onclick="calPrev()">‹</button>
+      <div class="cal-month" id="cal-month-label"></div>
+      <button class="cal-nav" onclick="calNext()">›</button>
+    </div>
+    <div class="cal-days-header">
+      <div class="cal-day-name">Su</div><div class="cal-day-name">Mo</div><div class="cal-day-name">Tu</div><div class="cal-day-name">We</div><div class="cal-day-name">Th</div><div class="cal-day-name">Fr</div><div class="cal-day-name">Sa</div>
+    </div>
+    <div class="cal-days" id="cal-days"></div>
+    <div class="cal-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#fce8ec"></div> Period</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e8f5e9"></div> Ovulation</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f3fce8"></div> Fertile</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#fce8ec88;border:1.5px dashed #d94f6b55"></div> Predicted</div>
+    </div>
+  </div>
+  <div class="period-settings">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--deep-rose);margin-bottom:16px;">Cycle Settings</div>
+    <div class="settings-row">
+      <div><div class="settings-label">Cycle Length</div><div class="settings-sub">Average days between periods</div></div>
+      <input class="settings-input" type="number" id="cycle-length" min="20" max="45" value="28" oninput="savePeriodSettings()">
+    </div>
+    <div class="settings-row">
+      <div><div class="settings-label">Period Duration</div><div class="settings-sub">How many days her period lasts</div></div>
+      <input class="settings-input" type="number" id="period-duration" min="2" max="10" value="5" oninput="savePeriodSettings()">
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="period-modal">
+  <div class="modal">
+    <h3>🩸 Log Period</h3>
+    <div class="modal-field"><label>Start Date</label><input type="date" id="period-date-input"></div>
+    <div class="modal-field"><label>Notes (optional)</label><textarea rows="2" id="period-notes-input" placeholder="How is she feeling..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('period-modal')">Cancel</button>
+      <button class="btn-primary" onclick="logPeriod()">Save 🌸</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTES -->
+<div class="section" id="section-notes">
+  <div class="section-title">Love Notes</div>
+  <div class="section-line"></div>
+  <div class="notes-list" id="notes-list"></div>
+  <button class="add-btn" onclick="openNoteModal()">+ Write a Note</button>
+</div>
+<div class="modal-overlay" id="note-modal">
+  <div class="modal">
+    <h3>💌 New Love Note</h3>
+    <div class="modal-field"><label>Note / Memory</label><textarea rows="5" id="note-text-input" placeholder="Write something beautiful for her..."></textarea></div>
+    <div class="modal-field"><label>Mood Emoji</label><input type="text" id="note-mood-input" placeholder="💖" maxlength="2"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('note-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveNote()">Save 🌸</button>
+    </div>
+  </div>
+</div>
+
+<!-- COUNTDOWN -->
+<div class="section" id="section-countdown">
+  <div class="section-title">Countdowns</div>
+  <div class="section-line"></div>
+  <div class="countdown-hero">
+    <div class="countdown-label">next special moment</div>
+    <div class="countdown-title" id="cd-hero-title">Add your first countdown below</div>
+    <div class="countdown-timer">
+      <div class="countdown-unit"><span class="countdown-num" id="cd-d">–</span><div class="countdown-unit-label">Days</div></div>
+      <div class="countdown-unit"><span class="countdown-num" id="cd-h">–</span><div class="countdown-unit-label">Hours</div></div>
+      <div class="countdown-unit"><span class="countdown-num" id="cd-m">–</span><div class="countdown-unit-label">Mins</div></div>
+      <div class="countdown-unit"><span class="countdown-num" id="cd-s">–</span><div class="countdown-unit-label">Secs</div></div>
+    </div>
+  </div>
+  <div class="countdown-list" id="countdown-list"></div>
+  <button class="add-btn" onclick="openCdModal()">+ Add Countdown</button>
+</div>
+<div class="modal-overlay" id="cd-modal">
+  <div class="modal">
+    <h3>⏳ Add Countdown</h3>
+    <div class="modal-field"><label>Event Name</label><input type="text" id="cd-name-input" placeholder="e.g. Our Anniversary"></div>
+    <div class="modal-field"><label>Date</label><input type="date" id="cd-date-input"></div>
+    <div class="modal-field"><label>Icon Emoji</label><input type="text" id="cd-icon-input" placeholder="💍" maxlength="2"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('cd-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveCd()">Save 🌸</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== SUPABASE =====
+const SUPABASE_URL = 'https://xrauuhmtdkqeqkwkzepz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyYXV1aG10ZGtxZXFrd2t6ZXB6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3Mzk5NzEsImV4cCI6MjA5NDMxNTk3MX0.cdGjZ-g0VueipB4KOZyndHCDAZLSu3EE49-mt2sBNFU';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ===== TOAST =====
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ===== PETALS =====
+(function() {
+  const petals = ['🌸','🌺','💗','🌷','✿'];
+  const c = document.getElementById('petals');
+  for(let i=0;i<10;i++) {
+    const el = document.createElement('div');
+    el.className = 'petal';
+    el.textContent = petals[Math.floor(Math.random()*petals.length)];
+    el.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*20}%;animation-duration:${6+Math.random()*8}s;animation-delay:${Math.random()*6}s;font-size:${0.8+Math.random()*1.2}rem;`;
+    c.appendChild(el);
+  }
+})();
+
+// ===== NAV =====
+function showSection(id, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('section-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='period') renderPeriod();
+  if(id==='countdown') startCdTicker();
+}
+
+// ===== DB HELPERS =====
+async function dbGet(key) {
+  const { data } = await sb.from('madha_store').select('value').eq('key', key).single();
+  return data ? data.value : null;
+}
+async function dbSet(key, value) {
+  await sb.from('madha_store').upsert({ key, value }, { onConflict: 'key' });
+}
+async function dbDelete(key) {
+  await sb.from('madha_store').delete().eq('key', key);
+}
+
+// ===== GALLERY =====
+async function addPhotos(e) {
+  const files = Array.from(e.target.files);
+  for(const file of files) {
+    const id = 'photo_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    // Show placeholder while uploading
+    const grid = document.getElementById('gallery-grid');
+    const placeholder = document.createElement('div');
+    placeholder.className = 'gallery-item';
+    placeholder.id = 'ph_'+id;
+    placeholder.innerHTML = '<div class="gallery-uploading">🌸</div>';
+    grid.prepend(placeholder);
+
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      const src = ev.target.result;
+      await dbSet(id, { src, caption: '', created_at: new Date().toISOString() });
+      placeholder.remove();
+      prependPhotoCard(id, src, '');
+      toast('Photo saved! 🌸');
+    };
+    reader.readAsDataURL(file);
+  }
+  e.target.value = '';
+}
+
+function prependPhotoCard(id, src, caption) {
+  const grid = document.getElementById('gallery-grid');
+  const div = document.createElement('div');
+  div.className = 'gallery-item';
+  div.id = 'photo_card_'+id;
+  div.innerHTML = `
+    <img src="${src}" alt="Madha" onclick="openLightbox('${src}')">
+    <div class="gallery-caption">${caption||'🌸 Madha'}</div>
+    <button class="delete-btn" onclick="event.stopPropagation();deletePhoto('${id}')">✕</button>
+  `;
+  grid.prepend(div);
+}
+
+async function loadGallery() {
+  const { data } = await sb.from('madha_store').select('key,value').like('key','photo_%');
+  const grid = document.getElementById('gallery-grid');
+  grid.innerHTML = '';
+  if(!data||!data.length) return;
+  data.sort((a,b) => (b.value.created_at||'') > (a.value.created_at||'') ? 1 : -1);
+  data.forEach(row => prependPhotoCard(row.key, row.value.src, row.value.caption));
+}
+
+async function deletePhoto(id) {
+  await dbDelete(id);
+  const el = document.getElementById('photo_card_'+id);
+  if(el) el.remove();
+  toast('Photo removed');
+}
+
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+
+// ===== ABOUT =====
+async function loadAbout() {
+  const data = await dbGet('about');
+  if(!data) return;
+  if(data.birthday) document.getElementById('about-birthday').value = data.birthday;
+  if(data.hometown) document.getElementById('about-hometown').value = data.hometown;
+  if(data.job) document.getElementById('about-job').value = data.job;
+  if(data.fav) document.getElementById('about-fav').value = data.fav;
+  if(data.favThing) document.getElementById('about-fav-thing').value = data.favThing;
+  if(data.tagline) { document.getElementById('about-tagline').value = data.tagline; document.getElementById('tagline-display').textContent = data.tagline; document.getElementById('header-sub').textContent = data.tagline; }
+  if(data.avatar) { document.getElementById('avatar-placeholder').style.display='none'; document.getElementById('avatar-img').style.display='block'; document.getElementById('avatar-img').src=data.avatar; }
+}
+
+async function saveAbout() {
+  const data = {
+    birthday: document.getElementById('about-birthday').value,
+    hometown: document.getElementById('about-hometown').value,
+    job: document.getElementById('about-job').value,
+    fav: document.getElementById('about-fav').value,
+    favThing: document.getElementById('about-fav-thing').value,
+    tagline: document.getElementById('about-tagline').value,
+    avatar: document.getElementById('avatar-img').src || null
+  };
+  if(data.tagline) { document.getElementById('tagline-display').textContent = data.tagline; document.getElementById('header-sub').textContent = data.tagline; }
+  await dbSet('about', data);
+  toast('Saved! 🌸');
+}
+
+async function setAvatar(e) {
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    document.getElementById('avatar-placeholder').style.display='none';
+    document.getElementById('avatar-img').style.display='block';
+    document.getElementById('avatar-img').src = ev.target.result;
+    toast('Photo updated 🌸');
+  };
+  reader.readAsDataURL(e.target.files[0]);
+  e.target.value='';
+}
+
+// ===== QUALIFICATIONS =====
+let quals = [];
+
+async function loadQuals() {
+  const data = await dbGet('quals');
+  quals = data || [];
+  renderQuals();
+}
+
+function openQualModal() {
+  ['qual-title-input','qual-inst-input','qual-year-input','qual-desc-input'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('qual-icon-input').value='🎓';
+  document.getElementById('qual-modal').classList.add('open');
+}
+
+async function saveQual() {
+  const q = {
+    id: Date.now(),
+    title: document.getElementById('qual-title-input').value,
+    inst: document.getElementById('qual-inst-input').value,
+    year: document.getElementById('qual-year-input').value,
+    desc: document.getElementById('qual-desc-input').value,
+    icon: document.getElementById('qual-icon-input').value||'🎓'
+  };
+  if(!q.title) return;
+  quals.unshift(q);
+  await dbSet('quals', quals);
+  renderQuals();
+  closeModal('qual-modal');
+  toast('Achievement added! 🎓');
+}
+
+function renderQuals() {
+  const list = document.getElementById('qual-list');
+  if(!quals.length) { list.innerHTML='<div style="text-align:center;color:var(--muted);font-family:Cormorant Garamond,serif;font-size:1.1rem;padding:30px;">Her achievements will shine here 🌟</div>'; return; }
+  list.innerHTML = quals.map((q,i) => `
+    <div class="qual-card">
+      <div class="qual-icon">${q.icon}</div>
+      <div class="qual-info">
+        <div class="qual-title">${q.title}</div>
+        <div class="qual-sub">${q.inst||''}</div>
+        ${q.desc?`<div class="qual-desc">${q.desc}</div>`:''}
+      </div>
+      ${q.year?`<div class="qual-year">${q.year}</div>`:''}
+      <button class="qual-delete" onclick="deleteQual(${i})">🗑️</button>
+    </div>`).join('');
+}
+
+async function deleteQual(i) {
+  quals.splice(i,1);
+  await dbSet('quals', quals);
+  renderQuals();
+  toast('Removed');
+}
+
+// ===== PERIOD =====
+let periodLogs = [], cycleLength = 28, periodDuration = 5;
+let calDate = new Date();
+
+async function loadPeriod() {
+  const data = await dbGet('period');
+  if(data) { periodLogs = data.logs||[]; cycleLength = data.cycleLength||28; periodDuration = data.periodDuration||5; }
+  document.getElementById('cycle-length').value = cycleLength;
+  document.getElementById('period-duration').value = periodDuration;
+}
+
+async function savePeriodData() {
+  await dbSet('period', { logs: periodLogs, cycleLength, periodDuration });
+}
+
+function savePeriodSettings() {
+  cycleLength = parseInt(document.getElementById('cycle-length').value)||28;
+  periodDuration = parseInt(document.getElementById('period-duration').value)||5;
+  savePeriodData();
+  renderPeriod();
+}
+
+function openPeriodLogModal() {
+  document.getElementById('period-date-input').value = new Date().toISOString().split('T')[0];
+  document.getElementById('period-notes-input').value = '';
+  document.getElementById('period-modal').classList.add('open');
+}
+
+async function logPeriod() {
+  const d = document.getElementById('period-date-input').value;
+  if(!d) return;
+  periodLogs.unshift({ date: d, notes: document.getElementById('period-notes-input').value });
+  periodLogs.sort((a,b) => new Date(b.date)-new Date(a.date));
+  await savePeriodData();
+  closeModal('period-modal');
+  renderPeriod();
+  toast('Period logged 🌙');
+}
+
+function renderPeriod() {
+  document.getElementById('cycle-length').value = cycleLength;
+  document.getElementById('period-duration').value = periodDuration;
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(!periodLogs.length) {
+    document.getElementById('period-status-text').textContent="No period logged yet";
+    document.getElementById('period-days-big').textContent='–';
+    document.getElementById('period-days-label').textContent='log her first period';
+    document.getElementById('period-phase-badge').textContent='Add data to begin';
+    document.getElementById('period-phase-badge').className='period-phase-badge phase-follicular';
+    ['last-period-val','next-period-val','ovulation-val','fertile-val'].forEach(id => document.getElementById(id).textContent='–');
+    renderCalendar(); return;
+  }
+  const lastDate = new Date(periodLogs[0].date);
+  const nextPeriod = new Date(lastDate); nextPeriod.setDate(nextPeriod.getDate()+cycleLength);
+  const ovulationDay = new Date(lastDate); ovulationDay.setDate(ovulationDay.getDate()+cycleLength-14);
+  const fertileStart = new Date(ovulationDay); fertileStart.setDate(fertileStart.getDate()-5);
+  const fertileEnd = new Date(ovulationDay); fertileEnd.setDate(fertileEnd.getDate()+1);
+  const daysSinceLast = Math.floor((today-lastDate)/86400000);
+  const daysUntilNext = Math.ceil((nextPeriod-today)/86400000);
+  let phase, phaseClass, statusText, bigNum, bigLabel;
+  if(daysSinceLast>=0&&daysSinceLast<periodDuration) { phase='🩸 Menstrual Phase'; phaseClass='phase-menstrual'; statusText="She is on her period"; bigNum=periodDuration-daysSinceLast; bigLabel='days remaining'; }
+  else if(today<fertileStart) { phase='🌱 Follicular Phase'; phaseClass='phase-follicular'; statusText="Days since last period"; bigNum=daysSinceLast; bigLabel='days ago'; }
+  else if(today>=fertileStart&&today<=fertileEnd) { phase='🌟 Fertile Window'; phaseClass='phase-ovulation'; statusText="She is in her fertile window"; bigNum=Math.ceil((fertileEnd-today)/86400000)+1; bigLabel='fertile days left'; }
+  else { phase='🌙 Luteal Phase'; phaseClass='phase-luteal'; statusText="Next period in"; bigNum=Math.max(0,daysUntilNext); bigLabel='days away'; }
+  document.getElementById('period-status-text').textContent=statusText;
+  document.getElementById('period-days-big').textContent=bigNum;
+  document.getElementById('period-days-label').textContent=bigLabel;
+  document.getElementById('period-phase-badge').textContent=phase;
+  document.getElementById('period-phase-badge').className='period-phase-badge '+phaseClass;
+  const fmt = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  document.getElementById('last-period-val').textContent=fmt(lastDate);
+  document.getElementById('next-period-val').textContent=daysUntilNext>0?`${fmt(nextPeriod)} (${daysUntilNext}d)`:'Today/Overdue';
+  document.getElementById('ovulation-val').textContent=fmt(ovulationDay);
+  document.getElementById('fertile-val').textContent=`${fmt(fertileStart)} – ${fmt(fertileEnd)}`;
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const year=calDate.getFullYear(), month=calDate.getMonth();
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('cal-month-label').textContent=`${months[month]} ${year}`;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const periodDays=new Set(), ovulDays=new Set(), fertileDays=new Set(), predictedDays=new Set();
+  periodLogs.forEach(log => {
+    const start=new Date(log.date);
+    for(let i=0;i<periodDuration;i++){const d=new Date(start);d.setDate(d.getDate()+i);periodDays.add(d.toDateString());}
+    const ov=new Date(start);ov.setDate(ov.getDate()+cycleLength-14);
+    ovulDays.add(ov.toDateString());
+    for(let i=-5;i<=1;i++){const d=new Date(ov);d.setDate(d.getDate()+i);fertileDays.add(d.toDateString());}
+  });
+  if(periodLogs.length){
+    const lastDate=new Date(periodLogs[0].date);
+    for(let c=1;c<=6;c++){
+      const ns=new Date(lastDate);ns.setDate(ns.getDate()+cycleLength*c);
+      for(let i=0;i<periodDuration;i++){const d=new Date(ns);d.setDate(d.getDate()+i);if(!periodDays.has(d.toDateString()))predictedDays.add(d.toDateString());}
+    }
+  }
+  const firstDay=new Date(year,month,1).getDay(), daysInMonth=new Date(year,month+1,0).getDate();
+  let html='';
+  for(let i=0;i<firstDay;i++) html+='<div class="cal-day empty"></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const date=new Date(year,month,d),ds=date.toDateString();
+    let cls='cal-day';
+    if(ds===today.toDateString()) cls+=' today';
+    if(periodDays.has(ds)) cls+=' period-day';
+    else if(ovulDays.has(ds)) cls+=' ovulation-day';
+    else if(fertileDays.has(ds)) cls+=' fertile-day';
+    else if(predictedDays.has(ds)) cls+=' predicted-period';
+    html+=`<div class="${cls}">${d}</div>`;
+  }
+  document.getElementById('cal-days').innerHTML=html;
+}
+
+function calPrev(){calDate.setMonth(calDate.getMonth()-1);renderCalendar();}
+function calNext(){calDate.setMonth(calDate.getMonth()+1);renderCalendar();}
+
+// ===== NOTES =====
+let notes = [];
+
+async function loadNotes() {
+  const data = await dbGet('notes');
+  notes = data || [];
+  renderNotes();
+}
+
+function openNoteModal() {
+  document.getElementById('note-text-input').value='';
+  document.getElementById('note-mood-input').value='💖';
+  document.getElementById('note-modal').classList.add('open');
+}
+
+async function saveNote() {
+  const text = document.getElementById('note-text-input').value;
+  if(!text) return;
+  notes.unshift({ text, mood: document.getElementById('note-mood-input').value||'💖', date: new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) });
+  await dbSet('notes', notes);
+  renderNotes();
+  closeModal('note-modal');
+  toast('Love note saved 💌');
+}
+
+function renderNotes() {
+  const list=document.getElementById('notes-list');
+  if(!notes.length){list.innerHTML='<div style="text-align:center;color:var(--muted);font-family:Cormorant Garamond,serif;font-size:1.1rem;padding:30px;">Your love notes will appear here 💌</div>';return;}
+  list.innerHTML=notes.map((n,i)=>`
+    <div class="note-card">
+      <div class="note-date">${n.date}</div>
+      <div class="note-text">${n.text}</div>
+      <div class="note-mood">${n.mood}</div>
+      <button class="note-delete" onclick="deleteNote(${i})">🗑️</button>
+    </div>`).join('');
+}
+
+async function deleteNote(i) {
+  notes.splice(i,1);
+  await dbSet('notes',notes);
+  renderNotes();
+  toast('Removed');
+}
+
+// ===== COUNTDOWN =====
+let countdowns = [], cdInterval;
+
+async function loadCountdowns() {
+  const data = await dbGet('countdowns');
+  countdowns = data || [];
+  renderCountdowns();
+}
+
+function openCdModal() {
+  ['cd-name-input','cd-date-input'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cd-icon-input').value='💝';
+  document.getElementById('cd-modal').classList.add('open');
+}
+
+async function saveCd() {
+  const name=document.getElementById('cd-name-input').value, date=document.getElementById('cd-date-input').value;
+  if(!name||!date) return;
+  countdowns.push({name,date,icon:document.getElementById('cd-icon-input').value||'💝'});
+  countdowns.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  await dbSet('countdowns',countdowns);
+  renderCountdowns();
+  closeModal('cd-modal');
+  toast('Countdown added! ⏳');
+}
+
+function renderCountdowns() {
+  const list=document.getElementById('countdown-list');
+  if(!countdowns.length){list.innerHTML='<div style="text-align:center;color:var(--muted);font-family:Cormorant Garamond,serif;font-size:1.1rem;padding:30px;">Add your first special moment below 💝</div>';return;}
+  const now=new Date();
+  list.innerHTML=countdowns.map((c,i)=>{
+    const target=new Date(c.date), diff=target-now, days=diff>0?Math.ceil(diff/86400000):0;
+    const fmt=target.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+    return `<div class="countdown-card">
+      <div class="countdown-card-icon">${c.icon}</div>
+      <div><div class="countdown-card-name">${c.name}</div><div class="countdown-card-date">${fmt}</div></div>
+      <div class="countdown-card-days">${days}<span>days to go</span></div>
+      <button class="cd-delete" onclick="deleteCd(${i})">🗑️</button>
+    </div>`;
+  }).join('');
+}
+
+async function deleteCd(i) {
+  countdowns.splice(i,1);
+  await dbSet('countdowns',countdowns);
+  renderCountdowns();
+  toast('Removed');
+}
+
+function startCdTicker() {
+  clearInterval(cdInterval); tickCd();
+  cdInterval=setInterval(tickCd,1000);
+}
+
+function tickCd() {
+  const next=countdowns.find(c=>new Date(c.date)>new Date());
+  if(!next){document.getElementById('cd-hero-title').textContent='Add your first countdown below';return;}
+  document.getElementById('cd-hero-title').textContent=next.name;
+  const diff=new Date(next.date)-new Date();
+  if(diff<=0) return;
+  const d=Math.floor(diff/86400000),h=Math.floor((diff%86400000)/3600000),m=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
+  document.getElementById('cd-d').textContent=String(d).padStart(2,'0');
+  document.getElementById('cd-h').textContent=String(h).padStart(2,'0');
+  document.getElementById('cd-m').textContent=String(m).padStart(2,'0');
+  document.getElementById('cd-s').textContent=String(s).padStart(2,'0');
+}
+
+// ===== MODALS =====
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+document.getElementById('lightbox').addEventListener('click', closeLightbox);
+
+// ===== INIT =====
+async function init() {
+  try {
+    await Promise.all([loadGallery(), loadAbout(), loadQuals(), loadPeriod(), loadNotes(), loadCountdowns()]);
+    renderPeriod();
+  } catch(e) {
+    console.error(e);
+    toast('Could not connect to database 😢');
+  }
+  document.getElementById('loading').classList.add('hidden');
+}
+
+init();
+</script>
+</body>
+</html>
