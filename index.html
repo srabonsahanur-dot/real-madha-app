@@ -249,6 +249,71 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: var(--cream); }
   ::-webkit-scrollbar-thumb { background: var(--rose); border-radius: 3px; }
+
+  /* PHOTO VIEWER WINDOW */
+  .photo-viewer {
+    display: none; position: fixed; inset: 0;
+    background: rgba(20, 5, 12, 0.97);
+    z-index: 2000; flex-direction: column;
+    animation: fadeUp 0.3s ease;
+  }
+  .photo-viewer.open { display: flex; }
+  .photo-viewer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid rgba(232,160,176,0.15);
+    flex-shrink: 0;
+  }
+  .photo-viewer-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem; color: var(--rose); font-style: italic;
+  }
+  .photo-viewer-count {
+    font-size: 0.8rem; color: var(--muted); letter-spacing: 2px;
+  }
+  .photo-viewer-close {
+    background: none; border: none; color: white;
+    font-size: 1.8rem; cursor: pointer; opacity: 0.7; transition: opacity 0.2s;
+  }
+  .photo-viewer-close:hover { opacity: 1; }
+  .photo-viewer-body { display: flex; flex: 1; overflow: hidden; }
+  .photo-viewer-main {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 20px; position: relative;
+  }
+  .photo-viewer-main img {
+    max-width: 100%; max-height: 100%;
+    border-radius: 14px;
+    box-shadow: 0 8px 60px #00000080;
+    object-fit: contain;
+    transition: opacity 0.25s ease;
+  }
+  .photo-viewer-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    background: rgba(255,255,255,0.12); border: none;
+    color: white; font-size: 1.6rem; width: 48px; height: 48px;
+    border-radius: 50%; cursor: pointer; transition: background 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .photo-viewer-nav:hover { background: var(--deep-rose); }
+  .photo-viewer-prev { left: 16px; }
+  .photo-viewer-next { right: 16px; }
+  .photo-viewer-strip {
+    width: 110px; overflow-y: auto; padding: 12px 8px;
+    background: rgba(255,255,255,0.04);
+    border-left: 1px solid rgba(232,160,176,0.1);
+    display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+  }
+  .strip-thumb {
+    width: 90px; height: 90px; border-radius: 10px;
+    object-fit: cover; cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s, transform 0.2s;
+    opacity: 0.6;
+  }
+  .strip-thumb:hover { opacity: 0.9; transform: scale(1.04); }
+  .strip-thumb.active { border-color: var(--rose); opacity: 1; }
+  @media (max-width: 600px) { .photo-viewer-strip { display: none; } }
 </style>
 </head>
 <body>
@@ -292,6 +357,9 @@
     <div class="upload-sub">Click to upload · JPG, PNG, WEBP</div>
   </div>
   <input type="file" id="gallery-input" multiple accept="image/*" onchange="addPhotos(event)" style="display:none">
+  <div style="text-align:right; margin-bottom:16px;">
+    <button class="nav-btn" onclick="openPhotoViewer(0)">🖼️ View All Photos</button>
+  </div>
   <div class="gallery-grid" id="gallery-grid"></div>
 </div>
 
@@ -299,6 +367,23 @@
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close">✕</button>
   <img id="lightbox-img" src="" alt="">
+</div>
+
+<!-- PHOTO VIEWER WINDOW -->
+<div class="photo-viewer" id="photo-viewer">
+  <div class="photo-viewer-header">
+    <div class="photo-viewer-title">🌸 All Photos</div>
+    <div class="photo-viewer-count" id="pv-count"></div>
+    <button class="photo-viewer-close" onclick="closePhotoViewer()">✕</button>
+  </div>
+  <div class="photo-viewer-body">
+    <div class="photo-viewer-main">
+      <button class="photo-viewer-nav photo-viewer-prev" onclick="pvNav(-1)">‹</button>
+      <img id="pv-main-img" src="" alt="">
+      <button class="photo-viewer-nav photo-viewer-next" onclick="pvNav(1)">›</button>
+    </div>
+    <div class="photo-viewer-strip" id="pv-strip"></div>
+  </div>
 </div>
 
 <!-- ABOUT -->
@@ -503,57 +588,94 @@ async function dbDelete(key) {
 }
 
 // ===== GALLERY =====
+const BUCKET = 'photos';
+let galleryImages = [];
+
+function getPublicUrl(filename) {
+  return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${filename}`;
+}
+
 async function addPhotos(e) {
   const files = Array.from(e.target.files);
   for(const file of files) {
-    const id = 'photo_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    // Show placeholder while uploading
+    const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+    const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+    // Show uploading placeholder
     const grid = document.getElementById('gallery-grid');
     const placeholder = document.createElement('div');
     placeholder.className = 'gallery-item';
-    placeholder.id = 'ph_'+id;
-    placeholder.innerHTML = '<div class="gallery-uploading">🌸</div>';
+    placeholder.id = 'ph_' + filename;
+    placeholder.innerHTML = '<div class="gallery-uploading">🌸 uploading...</div>';
     grid.prepend(placeholder);
 
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      const src = ev.target.result;
-      await dbSet(id, { src, caption: '', created_at: new Date().toISOString() });
+    // Upload file blob directly to Supabase Storage
+    const { error } = await sb.storage.from(BUCKET).upload(filename, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type
+    });
+
+    if(error) {
       placeholder.remove();
-      prependPhotoCard(id, src, '');
-      toast('Photo saved! 🌸');
-    };
-    reader.readAsDataURL(file);
+      toast('Upload failed 😢 ' + error.message);
+      continue;
+    }
+
+    // Save metadata (filename + created_at) to madha_store
+    const meta = { filename, created_at: new Date().toISOString() };
+    await dbSet('photo_' + filename, meta);
+
+    placeholder.remove();
+    const publicUrl = getPublicUrl(filename);
+    prependPhotoCard('photo_' + filename, filename, publicUrl);
+    toast('Photo saved! 🌸');
   }
   e.target.value = '';
 }
 
-function prependPhotoCard(id, src, caption) {
+function prependPhotoCard(id, filename, src) {
+  // Track in galleryImages array (prepend = newest first)
+  galleryImages.unshift({ id, filename, url: src });
   const grid = document.getElementById('gallery-grid');
   const div = document.createElement('div');
   div.className = 'gallery-item';
-  div.id = 'photo_card_'+id;
+  div.id = 'photo_card_' + id;
+  const idx = 0; // newest goes to front
   div.innerHTML = `
-    <img src="${src}" alt="Madha" onclick="openLightbox('${src}')">
-    <div class="gallery-caption">${caption||'🌸 Madha'}</div>
-    <button class="delete-btn" onclick="event.stopPropagation();deletePhoto('${id}')">✕</button>
+    <img src="${src}" alt="Madha" loading="lazy" onclick="openPhotoViewer(getImageIndex('${id}'))">
+    <div class="gallery-caption">🌸 Madha</div>
+    <button class="delete-btn" onclick="event.stopPropagation();deletePhoto('${id}','${filename}')">✕</button>
   `;
   grid.prepend(div);
 }
 
 async function loadGallery() {
-  const { data } = await sb.from('madha_store').select('key,value').like('key','photo_%');
+  const { data } = await sb.from('madha_store').select('key,value').like('key', 'photo_%');
   const grid = document.getElementById('gallery-grid');
   grid.innerHTML = '';
-  if(!data||!data.length) return;
+  galleryImages = [];
+  if(!data || !data.length) return;
   data.sort((a,b) => (b.value.created_at||'') > (a.value.created_at||'') ? 1 : -1);
-  data.forEach(row => prependPhotoCard(row.key, row.value.src, row.value.caption));
+  data.forEach(row => {
+    const filename = row.value.filename;
+    if(!filename) return;
+    const publicUrl = getPublicUrl(filename);
+    prependPhotoCard(row.key, filename, publicUrl);
+  });
+  // After prepending all, reverse galleryImages so index 0 = newest (matches grid order)
+  galleryImages.reverse();
 }
 
-async function deletePhoto(id) {
+async function deletePhoto(id, filename) {
+  // Delete from storage
+  await sb.storage.from(BUCKET).remove([filename]);
+  // Delete metadata from db
   await dbDelete(id);
-  const el = document.getElementById('photo_card_'+id);
+  const el = document.getElementById('photo_card_' + id);
   if(el) el.remove();
+  // Remove from galleryImages
+  galleryImages = galleryImages.filter(g => g.id !== id);
   toast('Photo removed');
 }
 
@@ -562,6 +684,58 @@ function openLightbox(src) {
   document.getElementById('lightbox').classList.add('open');
 }
 function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+
+// ===== PHOTO VIEWER =====
+let pvIndex = 0;
+
+function getImageIndex(id) {
+  const i = galleryImages.findIndex(g => g.id === id);
+  return i >= 0 ? i : 0;
+}
+
+function openPhotoViewer(startIndex) {
+  if (!galleryImages || galleryImages.length === 0) { toast('No photos yet 🌸'); return; }
+  pvIndex = startIndex || 0;
+  renderPhotoViewer();
+  document.getElementById('photo-viewer').classList.add('open');
+}
+
+function closePhotoViewer() {
+  document.getElementById('photo-viewer').classList.remove('open');
+}
+
+function renderPhotoViewer() {
+  const img = galleryImages[pvIndex];
+  if (!img) return;
+  const mainImg = document.getElementById('pv-main-img');
+  mainImg.style.opacity = 0;
+  setTimeout(() => { mainImg.src = img.url; mainImg.style.opacity = 1; }, 150);
+  document.getElementById('pv-count').textContent = `${pvIndex + 1} / ${galleryImages.length}`;
+  const strip = document.getElementById('pv-strip');
+  strip.innerHTML = galleryImages.map((g, i) =>
+    `<img class="strip-thumb ${i === pvIndex ? 'active' : ''}" src="${g.url}" onclick="pvGoTo(${i})" loading="lazy">`
+  ).join('');
+  const active = strip.querySelector('.strip-thumb.active');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+function pvNav(dir) {
+  if (!galleryImages.length) return;
+  pvIndex = (pvIndex + dir + galleryImages.length) % galleryImages.length;
+  renderPhotoViewer();
+}
+
+function pvGoTo(i) {
+  pvIndex = i;
+  renderPhotoViewer();
+}
+
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('photo-viewer').classList.contains('open')) return;
+  if (e.key === 'ArrowRight') pvNav(1);
+  if (e.key === 'ArrowLeft') pvNav(-1);
+  if (e.key === 'Escape') closePhotoViewer();
+});
 
 // ===== ABOUT =====
 async function loadAbout() {
@@ -573,33 +747,46 @@ async function loadAbout() {
   if(data.fav) document.getElementById('about-fav').value = data.fav;
   if(data.favThing) document.getElementById('about-fav-thing').value = data.favThing;
   if(data.tagline) { document.getElementById('about-tagline').value = data.tagline; document.getElementById('tagline-display').textContent = data.tagline; document.getElementById('header-sub').textContent = data.tagline; }
-  if(data.avatar) { document.getElementById('avatar-placeholder').style.display='none'; document.getElementById('avatar-img').style.display='block'; document.getElementById('avatar-img').src=data.avatar; }
+  const avatarUrl = data.avatarUrl || data.avatar || null;
+  if(avatarUrl && !avatarUrl.startsWith('data:')) { document.getElementById('avatar-placeholder').style.display='none'; document.getElementById('avatar-img').style.display='block'; document.getElementById('avatar-img').src=avatarUrl+'?t='+Date.now(); }
 }
 
 async function saveAbout() {
+  const existing = await dbGet('about') || {};
   const data = {
+    ...existing,
     birthday: document.getElementById('about-birthday').value,
     hometown: document.getElementById('about-hometown').value,
     job: document.getElementById('about-job').value,
     fav: document.getElementById('about-fav').value,
     favThing: document.getElementById('about-fav-thing').value,
     tagline: document.getElementById('about-tagline').value,
-    avatar: document.getElementById('avatar-img').src || null
   };
+  // don't overwrite avatarUrl with base64 src
   if(data.tagline) { document.getElementById('tagline-display').textContent = data.tagline; document.getElementById('header-sub').textContent = data.tagline; }
   await dbSet('about', data);
   toast('Saved! 🌸');
 }
 
 async function setAvatar(e) {
-  const reader = new FileReader();
-  reader.onload = async ev => {
-    document.getElementById('avatar-placeholder').style.display='none';
-    document.getElementById('avatar-img').style.display='block';
-    document.getElementById('avatar-img').src = ev.target.result;
-    toast('Photo updated 🌸');
-  };
-  reader.readAsDataURL(e.target.files[0]);
+  const file = e.target.files[0];
+  if(!file) return;
+  const ext = file.name.split('.').pop() || 'jpg';
+  const filename = `avatar.${ext}`;
+  await sb.storage.from(BUCKET).remove([filename]);
+  const { error } = await sb.storage.from(BUCKET).upload(filename, file, {
+    cacheControl: '1', upsert: true, contentType: file.type
+  });
+  if(error) { toast('Avatar upload failed 😢'); return; }
+  const url = getPublicUrl(filename) + '?t=' + Date.now();
+  document.getElementById('avatar-placeholder').style.display='none';
+  document.getElementById('avatar-img').style.display='block';
+  document.getElementById('avatar-img').src = url;
+  // Save avatar url in about data
+  const about = await dbGet('about') || {};
+  about.avatarUrl = getPublicUrl(filename);
+  await dbSet('about', about);
+  toast('Profile photo updated 🌸');
   e.target.value='';
 }
 
