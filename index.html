@@ -601,7 +601,6 @@ async function addPhotos(e) {
     const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
     const filename = `photo_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
-    // Show uploading placeholder
     const grid = document.getElementById('gallery-grid');
     const placeholder = document.createElement('div');
     placeholder.className = 'gallery-item';
@@ -609,11 +608,8 @@ async function addPhotos(e) {
     placeholder.innerHTML = '<div class="gallery-uploading">🌸 uploading...</div>';
     grid.prepend(placeholder);
 
-    // Upload file blob directly to Supabase Storage
     const { error } = await sb.storage.from(BUCKET).upload(filename, file, {
-      cacheControl: '3600',
-      upsert: false,
-      contentType: file.type
+      cacheControl: '3600', upsert: false, contentType: file.type
     });
 
     if(error) {
@@ -622,60 +618,76 @@ async function addPhotos(e) {
       continue;
     }
 
-    // Save metadata (filename + created_at) to madha_store
-    const meta = { filename, created_at: new Date().toISOString() };
-    await dbSet('photo_' + filename, meta);
-
     placeholder.remove();
     const publicUrl = getPublicUrl(filename);
-    prependPhotoCard('photo_' + filename, filename, publicUrl);
+    // Add to front of galleryImages and grid
+    galleryImages.unshift({ filename, url: publicUrl });
+    addPhotoCard(filename, publicUrl, true);
     toast('Photo saved! 🌸');
   }
   e.target.value = '';
 }
 
-function prependPhotoCard(id, filename, src) {
-  // Track in galleryImages array (prepend = newest first)
-  galleryImages.unshift({ id, filename, url: src });
+function addPhotoCard(filename, src, prepend = false) {
   const grid = document.getElementById('gallery-grid');
   const div = document.createElement('div');
   div.className = 'gallery-item';
-  div.id = 'photo_card_' + id;
-  const idx = 0; // newest goes to front
+  div.id = 'photo_card_' + filename;
+  const idx = galleryImages.findIndex(g => g.filename === filename);
   div.innerHTML = `
-    <img src="${src}" alt="Madha" loading="lazy" onclick="openPhotoViewer(getImageIndex('${id}'))">
-    <div class="gallery-caption">🌸 Madha</div>
-    <button class="delete-btn" onclick="event.stopPropagation();deletePhoto('${id}','${filename}')">✕</button>
+    <img src="${src}" alt="Madha" loading="lazy" onclick="openPhotoViewer(${idx >= 0 ? idx : 0})">
+    <button class="delete-btn" onclick="event.stopPropagation();deletePhoto('${filename}')">✕</button>
   `;
-  grid.prepend(div);
+  if(prepend) grid.prepend(div); else grid.appendChild(div);
 }
 
 async function loadGallery() {
-  const { data } = await sb.from('madha_store').select('key,value').like('key', 'photo_%');
+  // Load DIRECTLY from Supabase Storage bucket — no metadata table needed
   const grid = document.getElementById('gallery-grid');
-  grid.innerHTML = '';
+  grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-family:Cormorant Garamond,serif;font-style:italic;">Loading photos... 🌸</div>';
   galleryImages = [];
-  if(!data || !data.length) return;
-  data.sort((a,b) => (b.value.created_at||'') > (a.value.created_at||'') ? 1 : -1);
-  data.forEach(row => {
-    const filename = row.value.filename;
-    if(!filename) return;
-    const publicUrl = getPublicUrl(filename);
-    prependPhotoCard(row.key, filename, publicUrl);
+
+  const { data, error } = await sb.storage.from(BUCKET).list('', {
+    limit: 500,
+    sortBy: { column: 'created_at', order: 'desc' }
   });
-  // After prepending all, reverse galleryImages so index 0 = newest (matches grid order)
-  galleryImages.reverse();
+
+  grid.innerHTML = '';
+
+  if(error) { toast('Could not load photos 😢'); return; }
+  if(!data || !data.length) {
+    grid.innerHTML = '<div style="text-align:center;color:var(--muted);padding:30px;font-family:Cormorant Garamond,serif;font-style:italic;">No photos yet — add your first memory 🌸</div>';
+    return;
+  }
+
+  // Filter out avatar and non-photo files
+  const photos = data.filter(f => f.name && f.name.startsWith('photo_'));
+
+  photos.forEach(file => {
+    const url = getPublicUrl(file.name);
+    galleryImages.push({ filename: file.name, url });
+  });
+
+  galleryImages.forEach((img, i) => {
+    const div = document.createElement('div');
+    div.className = 'gallery-item';
+    div.id = 'photo_card_' + img.filename;
+    div.innerHTML = `
+      <img src="${img.url}" alt="Madha" loading="lazy" onclick="openPhotoViewer(${i})">
+      <button class="delete-btn" onclick="event.stopPropagation();deletePhoto('${img.filename}')">✕</button>
+    `;
+    grid.appendChild(div);
+  });
 }
 
-async function deletePhoto(id, filename) {
-  // Delete from storage
+async function deletePhoto(filename) {
+  if(!confirm('Remove this photo? 🥺')) return;
   await sb.storage.from(BUCKET).remove([filename]);
-  // Delete metadata from db
-  await dbDelete(id);
-  const el = document.getElementById('photo_card_' + id);
+  // Also clean up any old metadata entry if it exists
+  await sb.from('madha_store').delete().eq('key', 'photo_' + filename);
+  const el = document.getElementById('photo_card_' + filename);
   if(el) el.remove();
-  // Remove from galleryImages
-  galleryImages = galleryImages.filter(g => g.id !== id);
+  galleryImages = galleryImages.filter(g => g.filename !== filename);
   toast('Photo removed');
 }
 
